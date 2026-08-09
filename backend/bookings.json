@@ -1,0 +1,16 @@
+[
+    {
+        "customer_name": "string",
+        "vehicle_type": "string",
+        "preferred_date": "string",
+        "preferred_time": "string",
+        "contact_details": "string"
+    },
+    {
+        "customer_name": "Ahmed",
+        "vehicle_type": "Toyota Corolla",
+        "preferred_date": "2026-08-10",
+        "preferred_time": "16:00",
+        "contact_details": "03001234567"
+    }
+]
