@@ -107,22 +107,38 @@ IMPORTANT RULES:
 4. If information is not explicitly present in the latest
    message, return null for that field.
 
-5. Words such as "tomorrow", "today", "Monday", or "Friday"
-   represent DATE information and belong in preferred_date.
+5. Words and phrases such as "tomorrow", "today", "Monday",
+   "Friday", "this Friday", or "next Friday" represent DATE
+   information and belong in preferred_date.
 
-6. Expressions such as "5 PM", "at noon", or "10:30 AM"
+6. Expressions such as "5 PM", "at 5 PM", "3 PM",
+   "around 10:30 AM", "at noon", or "in the afternoon"
    represent TIME information and belong in preferred_time.
 
-7. Vehicle names such as "Toyota Corolla", "Honda Civic",
+7. When date and time appear together in the same sentence,
+   extract BOTH.
+
+   Example:
+   "I'd like to come Friday at 3 PM."
+
+   MUST produce:
+
+   "preferred_date": "Friday"
+   "preferred_time": "3 PM"
+
+8. Do not treat the word "at" as part of the time value.
+   Store "3 PM", not "at 3 PM".
+
+9. Vehicle names such as "Toyota Corolla", "Honda Civic",
    "SUV", or "sedan" belong in vehicle_type.
 
-8. A person's name belongs in customer_name.
+10. A person's name belongs in customer_name.
 
-9. A phone number or email belongs in contact_details.
+11. A phone number or email belongs in contact_details.
 
-10. If the customer corrects something, return the corrected value.
+12. If the customer corrects something, return the corrected value.
 
-11. Do not copy information from the current booking unless
+13. Do not copy information from the current booking unless
     the customer explicitly mentions or corrects it in the latest message.
 
 Return ONLY valid JSON.

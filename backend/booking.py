@@ -18,6 +18,12 @@ class Booking:
     preferred_time: Optional[str] = None
     contact_details: Optional[str] = None
 
+    # Booking workflow state
+    #if a customer confirms the status become confirm
+    
+    booking_status: str = "collecting"
+    awaiting_confirmation: bool = False
+
     #return a missing state list that is missing from the current conversation and are required for booking
     def missing_fields(self):
         missing = []
