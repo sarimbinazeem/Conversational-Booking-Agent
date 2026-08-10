@@ -25,7 +25,7 @@ class SessionManager:
         # create one.
         if session_id not in self.sessions:
 
-            self.sessions[session_id] = Conversation()
+            self.sessions[session_id] = Conversation(session_id)
 
         return self.sessions[session_id]
 

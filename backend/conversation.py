@@ -18,11 +18,12 @@ from backend.ai_agent import (
     extract_booking_information,
     generate_booking_response
 )
-
+from backend.database import create_booking
 
 class Conversation:
 
-    def __init__(self):
+    def __init__(self,session_id):
+        self.session_id = session_id
         self.booking = Booking()
 
     # CHECK WHETHER ALL REQUIRED INFORMATION EXISTS
@@ -62,8 +63,18 @@ class Conversation:
 
             confirmation = self.detect_confirmation(user_message)
 
+            #if there is confirmation then save trhe booking in the database
             if confirmation == "yes":
+                booking_id = create_booking(
+                    session_id=self.session_id,
+                    customer_name=self.booking.customer_name,
+                    vehicle_type=self.booking.vehicle_type,
+                    preferred_date=self.booking.preferred_date,
+                    preferred_time=self.booking.preferred_time,
+                    contact_details=self.booking.contact_details
+                )
 
+                self.booking.booking_id = booking_id
                 self.booking.booking_status = "confirmed"
                 self.booking.awaiting_confirmation = False
 
