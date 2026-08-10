@@ -10,7 +10,7 @@ from backend.booking import Booking
 from backend.storage import save_booking, load_booking
 from backend.conversation import Conversation
 from backend.session_manager import SessionManager
-from backend.database import initialize_database
+from backend.database import initialize_database, get_booking
 
 #creating the application
 app = FastAPI(
@@ -114,4 +114,20 @@ def chat(request: ChatRequest):
         "booking": booking_to_dict(
             result["booking"]
         )
+    }
+
+#Searching Booking through an endpoint
+@app.get("/bookings/{booking_id}")
+def booking_details(booking_id: int):
+
+    booking = get_booking(booking_id)
+
+    if booking is None:
+
+        return {
+            "message": "Booking not found."
+        }
+
+    return {
+        "booking": booking
     }
