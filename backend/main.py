@@ -86,9 +86,9 @@ def get_bookings():
 @app.post("/chat")
 def chat(request: ChatRequest):
 
-    booking = conversation.process_message(request.message)
+    result = conversation.process_message(request.message)
 
     return {
-        "message": "Message processed.",
-        "booking": booking
+        "message": result["response"],
+        "booking": result["booking"]
     }

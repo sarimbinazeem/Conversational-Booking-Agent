@@ -1,21 +1,28 @@
 """
 conversation.py
 
-this is a conversaiton manager
-
+Manages the state and flow of one customer conversation.
 """
 
 from backend.booking import Booking
-from backend.ai_agent import extract_booking_information
 
-#For conversational states memory
+from backend.ai_agent import (
+    extract_booking_information,
+    generate_booking_response
+)
+
+
 class Conversation:
-    
+
     def __init__(self):
-        #a booking dataclass
+        # Create an empty booking state.
         self.booking = Booking()
 
     def process_message(self, user_message):
+
+        # -------------------------------------------------
+        # STEP 1 — Create current state dictionary
+        # -------------------------------------------------
 
         current_booking = {
             "customer_name": self.booking.customer_name,
@@ -24,20 +31,19 @@ class Conversation:
             "preferred_time": self.booking.preferred_time,
             "contact_details": self.booking.contact_details
         }
-        
-        # Ask the LLM to extract information from the
-        # customer's latest message.
+
+        # -------------------------------------------------
+        # STEP 2 — Extract information from latest message
+        # -------------------------------------------------
+
         extracted_information = extract_booking_information(
             user_message,
             current_booking
         )
 
-        # IMPORTANT:
-        # Only update a field if the LLM actually extracted
-        # a value for that field.
-        #
-        # This prevents previously collected information
-        # from being accidentally replaced with None.
+        # -------------------------------------------------
+        # STEP 3 — Update only fields that contain new data
+        # -------------------------------------------------
 
         if extracted_information.get("customer_name") is not None:
             self.booking.customer_name = (
@@ -64,4 +70,18 @@ class Conversation:
                 extracted_information["contact_details"]
             )
 
-        return self.booking
+        # -------------------------------------------------
+        # STEP 4 — Generate conversational response
+        # -------------------------------------------------
+
+        response = generate_booking_response(
+            user_message,
+            self.booking
+        )
+
+        # Return both the updated booking state
+        # and the natural language response.
+        return {
+            "response": response,
+            "booking": self.booking
+        }
