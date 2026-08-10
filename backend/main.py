@@ -10,6 +10,7 @@ from backend.booking import Booking
 from backend.storage import save_booking, load_booking
 from backend.conversation import Conversation
 from backend.session_manager import SessionManager
+from backend.database import initialize_database
 
 #creating the application
 app = FastAPI(
@@ -17,6 +18,8 @@ app = FastAPI(
     description="Backend for WhatsApp and Voice car wash booking agents",
     version="1.0.0"
 )
+
+initialize_database()
 
 #BASE MODEL Class that gives a format of the booking 
 class BookingRequest(BaseModel):
