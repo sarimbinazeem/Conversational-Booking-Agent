@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from backend.booking import Booking
 from backend.storage import save_booking, load_booking
 from backend.conversation import Conversation
+from backend.session_manager import SessionManager
 
 #creating the application
 app = FastAPI(
@@ -26,10 +27,11 @@ class BookingRequest(BaseModel):
     contact_details: str
 
 class ChatRequest(BaseModel):
+    session_id:str
     message: str
 
-#only one user chat 
-conversation = Conversation()
+#multiple sessions conversation
+session_manager = SessionManager()
 
 #================Routers====================================
 
@@ -85,6 +87,8 @@ def get_bookings():
 
 @app.post("/chat")
 def chat(request: ChatRequest):
+    #gets a conversation
+    conversation = session_manager.get_conversation(request.session_id)
 
     result = conversation.process_message(request.message)
 
