@@ -1,43 +1,102 @@
 """
 main.py
 
-Starting the FAST API Server that have routers like /booking 
+FastAPI server for the car wash booking system.
+
+This backend provides:
+- Health checking
+- Direct booking creation
+- Booking retrieval
+- Conversational booking
+- Session-based conversation management
+
+The same /chat endpoint can later be used by:
+- WhatsApp / WAPI
+- Uplift AI Voice
+- Other conversational clients
 """
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+
 from backend.booking import Booking
-from backend.storage import save_booking, load_booking
 from backend.conversation import Conversation
 from backend.session_manager import SessionManager
-from backend.database import initialize_database, get_booking, get_all_bookings 
 
-#creating the application
+from backend.database import (
+    initialize_database,
+    create_booking,
+    get_booking,
+    get_all_bookings
+)
+
+
+# =========================================================
+# FASTAPI APPLICATION
+# =========================================================
+
 app = FastAPI(
     title="Car Wash Booking API",
-    description="Backend for WhatsApp and Voice car wash booking agents",
+    description=(
+        "Backend for WhatsApp and Voice car wash "
+        "booking agents"
+    ),
     version="1.0.0"
 )
 
+
+# =========================================================
+# DATABASE INITIALIZATION
+# =========================================================
+
 initialize_database()
 
-#BASE MODEL Class that gives a format of the booking 
+
+# =========================================================
+# REQUEST MODELS
+# =========================================================
+
 class BookingRequest(BaseModel):
+    """
+    Structure required when creating a booking directly.
+    """
+
     customer_name: str
     vehicle_type: str
     preferred_date: str
     preferred_time: str
     contact_details: str
 
+
 class ChatRequest(BaseModel):
-    session_id:str
+    """
+    Structure used by conversational agents.
+
+    session_id identifies the customer conversation.
+    message contains the customer's latest message.
+    """
+
+    session_id: str
     message: str
 
-#multiple sessions conversation
+
+# =========================================================
+# SESSION MANAGER
+# =========================================================
+
 session_manager = SessionManager()
 
-#TO IMPROVE THE API RESPONSE
+
+# =========================================================
+# HELPER FUNCTION
+# =========================================================
+
 def booking_to_dict(booking):
+    """
+    Convert a Booking object into a normal dictionary.
+
+    This makes the API response easier to read.
+    """
 
     return {
         "booking_id": booking.booking_id,
@@ -50,10 +109,14 @@ def booking_to_dict(booking):
         "awaiting_confirmation": booking.awaiting_confirmation
     }
 
-#================Routers====================================
+
+# =========================================================
+# BASIC ROUTES
+# =========================================================
 
 @app.get("/")
 def home():
+
     return {
         "message": "Car Wash Booking API is running."
     }
@@ -61,15 +124,19 @@ def home():
 
 @app.get("/health")
 def health():
+
     return {
         "status": "healthy"
     }
 
-#/POST endpoint to post bookings
-@app.post("/bookings")
-def create_booking(request: BookingRequest):
 
-    #create a Booking Class and save it
+# =========================================================
+# DIRECT BOOKING CREATION
+# =========================================================
+
+@app.post("/bookings")
+def create_direct_booking(request: BookingRequest):
+
     booking = Booking(
         customer_name=request.customer_name,
         vehicle_type=request.vehicle_type,
@@ -77,9 +144,10 @@ def create_booking(request: BookingRequest):
         preferred_time=request.preferred_time,
         contact_details=request.contact_details
     )
-    
-    #if the booking have missing details then raise an error 
+
+    # Check whether all required fields exist.
     if not booking.is_complete():
+
         raise HTTPException(
             status_code=400,
             detail={
@@ -88,26 +156,59 @@ def create_booking(request: BookingRequest):
             }
         )
 
-    save_booking(booking)
+    # Save confirmed booking into SQLite.
+    booking_id = create_booking(
+        session_id="direct_api",
+        customer_name=booking.customer_name,
+        vehicle_type=booking.vehicle_type,
+        preferred_date=booking.preferred_date,
+        preferred_time=booking.preferred_time,
+        contact_details=booking.contact_details
+    )
+
+    booking.booking_id = booking_id
+    booking.booking_status = "confirmed"
 
     return {
         "message": "Booking created successfully.",
-        "booking": booking
+        "booking": booking_to_dict(booking)
     }
 
-#/GET endpoint to retreive bookings
-@app.get("/bookings")
-def get_bookings():
-    return {
-        "bookings": load_booking()
-    }
+
+# =========================================================
+# CONVERSATIONAL CHAT ENDPOINT
+# =========================================================
 
 @app.post("/chat")
 def chat(request: ChatRequest):
-    #gets a conversation
-    conversation = session_manager.get_conversation(request.session_id)
 
-    result = conversation.process_message(request.message)
+    """
+    Main conversational endpoint.
+
+    External agents will eventually send requests like:
+
+    {
+        "session_id": "whatsapp_123",
+        "message": "My name is Ahmed"
+    }
+
+    or:
+
+    {
+        "session_id": "voice_456",
+        "message": "I want to book a car wash"
+    }
+    """
+
+    # Get the conversation belonging to this session.
+    conversation = session_manager.get_conversation(
+        request.session_id
+    )
+
+    # Process the customer's latest message.
+    result = conversation.process_message(
+        request.message
+    )
 
     return {
         "message": result["response"],
@@ -116,7 +217,11 @@ def chat(request: ChatRequest):
         )
     }
 
-#Searching Booking through an endpoint
+
+# =========================================================
+# GET ONE BOOKING
+# =========================================================
+
 @app.get("/bookings/{booking_id}")
 def booking_details(booking_id: int):
 
@@ -131,6 +236,11 @@ def booking_details(booking_id: int):
     return {
         "booking": booking
     }
+
+
+# =========================================================
+# GET ALL BOOKINGS
+# =========================================================
 
 @app.get("/bookings")
 def all_bookings():
