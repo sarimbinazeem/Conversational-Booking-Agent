@@ -10,7 +10,7 @@ from backend.booking import Booking
 from backend.storage import save_booking, load_booking
 from backend.conversation import Conversation
 from backend.session_manager import SessionManager
-from backend.database import initialize_database, get_booking
+from backend.database import initialize_database, get_booking, get_all_bookings 
 
 #creating the application
 app = FastAPI(
@@ -130,4 +130,11 @@ def booking_details(booking_id: int):
 
     return {
         "booking": booking
+    }
+
+@app.get("/bookings")
+def all_bookings():
+
+    return {
+        "bookings": get_all_bookings()
     }
