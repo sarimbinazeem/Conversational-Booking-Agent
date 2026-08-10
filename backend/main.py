@@ -36,6 +36,20 @@ class ChatRequest(BaseModel):
 #multiple sessions conversation
 session_manager = SessionManager()
 
+#TO IMPROVE THE API RESPONSE
+def booking_to_dict(booking):
+
+    return {
+        "booking_id": booking.booking_id,
+        "customer_name": booking.customer_name,
+        "vehicle_type": booking.vehicle_type,
+        "preferred_date": booking.preferred_date,
+        "preferred_time": booking.preferred_time,
+        "contact_details": booking.contact_details,
+        "booking_status": booking.booking_status,
+        "awaiting_confirmation": booking.awaiting_confirmation
+    }
+
 #================Routers====================================
 
 @app.get("/")
@@ -95,17 +109,9 @@ def chat(request: ChatRequest):
 
     result = conversation.process_message(request.message)
 
-    booking = result["booking"]
-
     return {
         "message": result["response"],
-        "booking": {
-            "customer_name": booking.customer_name,
-            "vehicle_type": booking.vehicle_type,
-            "preferred_date": booking.preferred_date,
-            "preferred_time": booking.preferred_time,
-            "contact_details": booking.contact_details,
-            "booking_status": booking.booking_status,
-            "awaiting_confirmation": booking.awaiting_confirmation
-        }
+        "booking": booking_to_dict(
+            result["booking"]
+        )
     }
