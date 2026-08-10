@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from backend.booking import Booking
 from backend.storage import save_booking, load_booking
+from backend.conversation import Conversation
 
 #creating the application
 app = FastAPI(
@@ -23,6 +24,12 @@ class BookingRequest(BaseModel):
     preferred_date: str
     preferred_time: str
     contact_details: str
+
+class ChatRequest(BaseModel):
+    message: str
+
+#only one user chat 
+conversation = Conversation()
 
 #================Routers====================================
 
@@ -74,4 +81,14 @@ def create_booking(request: BookingRequest):
 def get_bookings():
     return {
         "bookings": load_booking()
+    }
+
+@app.post("/chat")
+def chat(request: ChatRequest):
+
+    booking = conversation.process_message(request.message)
+
+    return {
+        "message": "Message processed.",
+        "booking": booking
     }
