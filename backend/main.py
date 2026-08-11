@@ -23,6 +23,8 @@ from backend.booking import Booking
 from backend.conversation import Conversation
 from backend.session_manager import SessionManager
 
+from backend.whatsapp import WhatsAppAgent
+
 from backend.database import (
     initialize_database,
     create_booking,
@@ -94,7 +96,7 @@ class WhatsAppWebhookRequest(BaseModel):
 # =========================================================
 
 session_manager = SessionManager()
-
+whatsapp_agnet = WhatsAppAgent()
 
 # =========================================================
 # HELPER FUNCTION
@@ -269,11 +271,8 @@ def whatsapp_webhook(request: WhatsAppWebhookRequest):
     same conversation workflow used by /chat.
     """
 
-    conversation = session_manager.get_conversation(
-        request.session_id
-    )
-
-    result = conversation.process_message(
+    result = whatsapp_agnet.process_message(
+        request.session_id,
         request.message
     )
 
