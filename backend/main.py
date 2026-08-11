@@ -247,14 +247,77 @@ def all_bookings():
 @app.post("/webhooks/vapi")
 async def vapi_webhook(request: Request):
 
-    # Read the raw request body
-    body = await request.body()
+    data = await request.json()
 
-    print("\n========== VAPI WEBHOOK ==========")
-    print("Headers:", dict(request.headers))
-    print("Raw body:", body.decode("utf-8", errors="replace"))
-    print("==================================\n")
+    message = data.get("message", {})
+
+    event_type = message.get("type", "unknown")
+
+    # -----------------------------------------------------
+    # Ignore events other than end-of-call reports
+    # -----------------------------------------------------
+
+    if event_type != "end-of-call-report":
+
+        print(f"\n[VAPI] Event received: {event_type}")
+
+        return {
+            "status": "received",
+            "event": event_type
+        }
+
+    # -----------------------------------------------------
+    # Extract call information
+    # -----------------------------------------------------
+
+    call = message.get("call", {})
+
+    call_id = call.get("id", "unknown")
+
+    ended_reason = message.get(
+        "endedReason",
+        "unknown"
+    )
+
+    duration = message.get(
+        "durationSeconds",
+        0
+    )
+
+    # -----------------------------------------------------
+    # Extract transcript
+    # -----------------------------------------------------
+
+    transcript = message.get(
+        "transcript",
+        ""
+    )
+
+    # -----------------------------------------------------
+    # Display clean report
+    # -----------------------------------------------------
+
+    print("\n")
+    print("=" * 60)
+    print("                 VAPI CALL REPORT")
+    print("=" * 60)
+
+    print(f"Call ID:       {call_id}")
+    print(f"End reason:    {ended_reason}")
+    print(f"Duration:      {duration} seconds")
+
+    print("\n--- TRANSCRIPT ---")
+
+    if transcript:
+        print(transcript)
+    else:
+        print("No transcript available.")
+
+    print("=" * 60)
+    print()
 
     return {
-        "status": "received"
+        "status": "received",
+        "event": event_type,
+        "call_id": call_id
     }
