@@ -79,6 +79,15 @@ class ChatRequest(BaseModel):
     session_id: str
     message: str
 
+class WhatsAppWebhookRequest(BaseModel):
+    """
+    Represents a simplified incoming WhatsApp message.
+
+    This is our internal webhook format for now.
+    """
+
+    session_id: str
+    message: str
 
 # =========================================================
 # SESSION MANAGER
@@ -247,4 +256,30 @@ def all_bookings():
 
     return {
         "bookings": get_all_bookings()
+    }
+
+#Special webhook endpoint given by whatsapp 
+@app.post("/webhooks/whatsapp")
+def whatsapp_webhook(request: WhatsAppWebhookRequest):
+
+    """
+    Receive an incoming WhatsApp message.
+
+    The webhook forwards the message into the
+    same conversation workflow used by /chat.
+    """
+
+    conversation = session_manager.get_conversation(
+        request.session_id
+    )
+
+    result = conversation.process_message(
+        request.message
+    )
+
+    return {
+        "message": result["response"],
+        "booking": booking_to_dict(
+            result["booking"]
+        )
     }
