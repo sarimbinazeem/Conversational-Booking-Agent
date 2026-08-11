@@ -4,26 +4,21 @@ main.py
 FastAPI server for the car wash booking system.
 
 This backend provides:
+
 - Health checking
 - Direct booking creation
 - Booking retrieval
 - Conversational booking
 - Session-based conversation management
-
-The same /chat endpoint can later be used by:
-- WhatsApp / WAPI
-- Uplift AI Voice
-- Other conversational clients
+- Vapi voice webhook integration
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 from backend.booking import Booking
 from backend.conversation import Conversation
 from backend.session_manager import SessionManager
-
-from backend.whatsapp import WhatsAppAgent
 
 from backend.database import (
     initialize_database,
@@ -81,22 +76,13 @@ class ChatRequest(BaseModel):
     session_id: str
     message: str
 
-class WhatsAppWebhookRequest(BaseModel):
-    """
-    Represents a simplified incoming WhatsApp message.
-
-    This is our internal webhook format for now.
-    """
-
-    session_id: str
-    message: str
 
 # =========================================================
 # SESSION MANAGER
 # =========================================================
 
 session_manager = SessionManager()
-whatsapp_agnet = WhatsAppAgent()
+
 
 # =========================================================
 # HELPER FUNCTION
@@ -196,18 +182,11 @@ def chat(request: ChatRequest):
     """
     Main conversational endpoint.
 
-    External agents will eventually send requests like:
+    Example request:
 
     {
-        "session_id": "whatsapp_123",
+        "session_id": "user_123",
         "message": "My name is Ahmed"
-    }
-
-    or:
-
-    {
-        "session_id": "voice_456",
-        "message": "I want to book a car wash"
     }
     """
 
@@ -260,25 +239,22 @@ def all_bookings():
         "bookings": get_all_bookings()
     }
 
-#Special webhook endpoint given by whatsapp 
-@app.post("/webhooks/whatsapp")
-def whatsapp_webhook(request: WhatsAppWebhookRequest):
 
-    """
-    Receive an incoming WhatsApp message.
+# =========================================================
+# VAPI WEBHOOK
+# =========================================================
 
-    The webhook forwards the message into the
-    same conversation workflow used by /chat.
-    """
+@app.post("/webhooks/vapi")
+async def vapi_webhook(request: Request):
 
-    result = whatsapp_agnet.process_message(
-        request.session_id,
-        request.message
-    )
+    # Read the raw request body
+    body = await request.body()
+
+    print("\n========== VAPI WEBHOOK ==========")
+    print("Headers:", dict(request.headers))
+    print("Raw body:", body.decode("utf-8", errors="replace"))
+    print("==================================\n")
 
     return {
-        "message": result["response"],
-        "booking": booking_to_dict(
-            result["booking"]
-        )
+        "status": "received"
     }
