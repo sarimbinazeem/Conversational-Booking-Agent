@@ -20,6 +20,9 @@ from backend.booking import Booking
 from backend.conversation import Conversation
 from backend.session_manager import SessionManager
 
+from fastapi import Query
+from fastapi.responses import PlainTextResponse
+
 from backend.vapi_chat import send_message_to_vapi
 
 from backend.database import (
@@ -33,7 +36,9 @@ from backend.whatsapp_service import (
     send_whatsapp_message
 )
 
+from dotenv import load_dotenv
 
+load_dotenv()
 # =========================================================
 # FASTAPI APPLICATION
 # =========================================================
@@ -615,61 +620,9 @@ async def vapi_create_booking(request: Request):
 @app.post("/webhooks/whatsapp")
 async def whatsapp_webhook(request: Request):
 
-    data = await request.json()
-
-    sender = data.get("sender")
-    message = data.get("message")
-
-    if not sender:
-        raise HTTPException(
-            status_code=400,
-            detail="Missing sender"
-        )
-
-    if not message:
-        raise HTTPException(
-            status_code=400,
-            detail="Missing message"
-        )
-
-    session_id = f"whatsapp_{sender}"
-
-    result = send_message_to_vapi(
-        message=message,
-        session_id=session_id
-    )
-
-    return {
-        "status": "processed",
-        "sender": sender,
-        "response": result
-    }
-
-@app.get("/webhooks/whatsapp")
-async def verify_whatsapp_webhook(
-    hub_mode: str = None,
-    hub_verify_token: str = None,
-    hub_challenge: str = None
-):
-
-    verify_token = os.getenv(
-        "WHATSAPP_VERIFY_TOKEN"
-    )
-
-    if ( hub_mode == "subscribe" and hub_verify_token == verify_token):
-        return int(hub_challenge)
-
-    raise HTTPException(
-        status_code=403,
-        detail="Verification failed"
-    )
-
-@app.post("/webhooks/whatsapp")
-async def whatsapp_webhook(request: Request):
-
-    data = await request.json()
-
     try:
+
+        data = await request.json()
 
         entries = data.get("entry", [])
 
@@ -681,40 +634,45 @@ async def whatsapp_webhook(request: Request):
 
                 value = change.get("value", {})
 
-                messages = value.get(
-                    "messages",
-                    []
-                )
+                messages = value.get("messages", [])
 
                 for message in messages:
 
+                    if message.get("type") != "text":
+                        continue
+
                     sender = message.get("from")
 
-                    message_type = message.get( "type"  )
-
-                    if message_type != "text":
-                        continue
-
                     user_message = (
-                        message.get("text",{}).get( "body","")
+                        message.get("text", {})
+                        .get("body", "")
                     )
 
-                    if not sender:
-                        continue
+                    print(f"[WHATSAPP] {sender}: {user_message}")
 
                     conversation = (
-                        session_manager.get_conversation( sender ) #get convo from databse by session ID
+                        session_manager.get_conversation(
+                            sender
+                        )
                     )
 
                     result = (
-                        conversation.process_message( user_message) #extract the booking info
+                        conversation.process_message(
+                            user_message
+                        )
                     )
 
-                    send_whatsapp_message(sender, result["response"] ) #send the watsapp 
+                    print(
+                        "[BOT RESPONSE]",
+                        result["response"]
+                    )
 
-        return {
-            "status": "ok"
-        }
+                    send_whatsapp_message(
+                        sender,
+                        result["response"]
+                    )
+
+        return {"status": "ok"}
 
     except Exception as e:
 
@@ -723,18 +681,28 @@ async def whatsapp_webhook(request: Request):
             str(e)
         )
 
-        return {
-            "status": "error"
-        } 
+        return {"status": "error"}
 
-@app.get("/test-whatsapp")
-def test_whatsapp():
 
-    send_whatsapp_message(
-        "923361251259",
-        "WhatsApp integration is working."
+@app.get("/webhooks/whatsapp")
+async def verify_webhook(
+    hub_mode: str = Query(None, alias="hub.mode"),
+    hub_verify_token: str = Query(None, alias="hub.verify_token"),
+    hub_challenge: str = Query(None, alias="hub.challenge")
+):
+    VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN")
+
+    print("MODE =", hub_mode)
+    print("META TOKEN =", hub_verify_token)
+    print("ENV TOKEN =", VERIFY_TOKEN)
+
+    if (
+        hub_mode == "subscribe"
+        and hub_verify_token == VERIFY_TOKEN
+    ):
+        return PlainTextResponse(hub_challenge)
+
+    raise HTTPException(
+        status_code=403,
+        detail="Verification failed"
     )
-
-    return {
-        "status": "sent"
-    }
