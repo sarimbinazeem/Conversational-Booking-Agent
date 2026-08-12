@@ -20,6 +20,8 @@ from backend.booking import Booking
 from backend.conversation import Conversation
 from backend.session_manager import SessionManager
 
+from backend.vapi_chat import send_message_to_vapi
+
 from backend.database import (
     initialize_database,
     create_booking,
@@ -604,4 +606,37 @@ async def vapi_create_booking(request: Request):
 
     return {
         "results": results
+    }
+
+@app.post("/webhooks/whatsapp")
+async def whatsapp_webhook(request: Request):
+
+    data = await request.json()
+
+    sender = data.get("sender")
+    message = data.get("message")
+
+    if not sender:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing sender"
+        )
+
+    if not message:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing message"
+        )
+
+    session_id = f"whatsapp_{sender}"
+
+    result = send_message_to_vapi(
+        message=message,
+        session_id=session_id
+    )
+
+    return {
+        "status": "processed",
+        "sender": sender,
+        "response": result
     }
