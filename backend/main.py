@@ -12,7 +12,7 @@ This backend provides:
 - Session-based conversation management
 - Vapi voice webhook integration
 """
-
+import os
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
@@ -27,6 +27,10 @@ from backend.database import (
     create_booking,
     get_booking,
     get_all_bookings
+)
+
+from backend.whatsapp_service import (
+    send_whatsapp_message
 )
 
 
@@ -639,4 +643,98 @@ async def whatsapp_webhook(request: Request):
         "status": "processed",
         "sender": sender,
         "response": result
+    }
+
+@app.get("/webhooks/whatsapp")
+async def verify_whatsapp_webhook(
+    hub_mode: str = None,
+    hub_verify_token: str = None,
+    hub_challenge: str = None
+):
+
+    verify_token = os.getenv(
+        "WHATSAPP_VERIFY_TOKEN"
+    )
+
+    if ( hub_mode == "subscribe" and hub_verify_token == verify_token):
+        return int(hub_challenge)
+
+    raise HTTPException(
+        status_code=403,
+        detail="Verification failed"
+    )
+
+@app.post("/webhooks/whatsapp")
+async def whatsapp_webhook(request: Request):
+
+    data = await request.json()
+
+    try:
+
+        entries = data.get("entry", [])
+
+        for entry in entries:
+
+            changes = entry.get("changes", [])
+
+            for change in changes:
+
+                value = change.get("value", {})
+
+                messages = value.get(
+                    "messages",
+                    []
+                )
+
+                for message in messages:
+
+                    sender = message.get("from")
+
+                    message_type = message.get( "type"  )
+
+                    if message_type != "text":
+                        continue
+
+                    user_message = (
+                        message.get("text",{}).get( "body","")
+                    )
+
+                    if not sender:
+                        continue
+
+                    conversation = (
+                        session_manager.get_conversation( sender ) #get convo from databse by session ID
+                    )
+
+                    result = (
+                        conversation.process_message( user_message) #extract the booking info
+                    )
+
+                    send_whatsapp_message(sender, result["response"] ) #send the watsapp 
+
+        return {
+            "status": "ok"
+        }
+
+    except Exception as e:
+
+        print(
+            "[WHATSAPP ERROR]",
+            str(e)
+        )
+
+        return {
+            "status": "error"
+        } 
+
+@app.get("/test-whatsapp")
+def test_whatsapp():
+
+    send_whatsapp_message(
+        "923361251259",
+        "WhatsApp integration is working."
+    )
+
+    return {
+        "status": "sent"
     }
