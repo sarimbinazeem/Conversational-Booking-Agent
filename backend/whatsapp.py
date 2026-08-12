@@ -3,10 +3,22 @@ whatsapp.py
 
 WhatsApp communication adapter.
 
-This file connects the existing booking workflow
-to a WhatsApp API provider.
+This module connects the WhatsApp channel to the existing
+conversational booking workflow.
 
-The booking logic itself remains inside Conversation.
+WhatsApp/WAPI is responsible only for communication.
+
+The actual booking intelligence remains inside:
+
+WhatsApp
+    ↓
+WhatsAppAgent
+    ↓
+Conversation
+    ↓
+AI Agent
+    ↓
+Database
 """
 
 import os
@@ -17,96 +29,152 @@ from dotenv import load_dotenv
 from backend.session_manager import SessionManager
 
 
-# Load environment variables
+# =========================================================
+# LOAD ENVIRONMENT VARIABLES
+# =========================================================
+
 load_dotenv()
 
+
+# =========================================================
+# WHATSAPP AGENT
+# =========================================================
 
 class WhatsAppAgent:
 
     def __init__(self):
-
         """
         Create the WhatsApp agent.
 
-        The agent owns the WhatsApp conversation sessions
-        and contains the provider-specific sending logic.
+        Each WhatsApp customer gets their own conversation
+        session.
         """
 
         self.session_manager = SessionManager()
 
-        self.api_key = os.getenv("VAPI_API_KEY")
+        # -------------------------------------------------
+        # WAPI configuration
+        # -------------------------------------------------
+
+        self.api_key = os.getenv("WAPI_API_KEY")
 
         self.base_url = os.getenv(
-            "VAPI_BASE_URL",
+            "WAPI_BASE_URL",
             "https://api.wapi.io"
         )
 
         self.send_endpoint = os.getenv(
-            "VAPI_SEND_ENDPOINT",
+            "WAPI_SEND_ENDPOINT",
             "/v1/send"
         )
 
-    # ---------------------------------------------------------
+
+    # =====================================================
     # PROCESS INCOMING MESSAGE
-    # ---------------------------------------------------------
+    # =====================================================
 
     def process_message(self, sender_id, message):
-
         """
-        Process a WhatsApp message.
+        Process an incoming WhatsApp text message.
 
         sender_id:
-            WhatsApp customer's unique identifier.
+            Unique WhatsApp identifier for the customer.
 
         message:
             Text sent by the customer.
+
+        The message is passed directly into the SAME
+        Conversation workflow used by the rest of the
+        application.
         """
 
-        # Get the customer's existing conversation.
+        if not sender_id:
+            raise ValueError(
+                "sender_id is required"
+            )
+
+        if not message:
+            raise ValueError(
+                "message is required"
+            )
+
+        # -------------------------------------------------
+        # Get customer's conversation
+        # -------------------------------------------------
+
         conversation = self.session_manager.get_conversation(
             sender_id
         )
 
-        # Send the message into our existing
-        # booking conversation workflow.
+        # -------------------------------------------------
+        # Process through existing booking logic
+        # -------------------------------------------------
+
         result = conversation.process_message(
             message
         )
 
         return result
 
-    # ---------------------------------------------------------
+
+    # =====================================================
     # SEND WHATSAPP MESSAGE
-    # ---------------------------------------------------------
+    # =====================================================
 
     def send_message(self, recipient, message):
-
         """
-        Send a text message through VAPI.
+        Send a text message through WAPI.
         """
 
         if not self.api_key:
-
             raise RuntimeError(
-                "VAPI_API_KEY is missing from .env"
+                "WAPI_API_KEY is missing from .env"
             )
 
-        #left side of base url / right side of send endpoint
+        if not recipient:
+            raise ValueError(
+                "recipient is required"
+            )
+
+        if not message:
+            raise ValueError(
+                "message is required"
+            )
+
+        # -------------------------------------------------
+        # Build WAPI endpoint
+        # -------------------------------------------------
+
         url = (
             self.base_url.rstrip("/")
             + "/"
             + self.send_endpoint.lstrip("/")
         )
 
+        # -------------------------------------------------
+        # Authentication
+        # -------------------------------------------------
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
 
+        # -------------------------------------------------
+        # Message payload
+        #
+        # Keep this isolated here because this is the
+        # provider-specific part of the application.
+        # -------------------------------------------------
+
         payload = {
             "to": recipient,
             "message": message
         }
+
+        # -------------------------------------------------
+        # Send request
+        # -------------------------------------------------
 
         response = requests.post(
             url,
@@ -115,8 +183,6 @@ class WhatsAppAgent:
             timeout=30
         )
 
-        #if there is an error it raises it
         response.raise_for_status()
 
-        #converts json into object
         return response.json()

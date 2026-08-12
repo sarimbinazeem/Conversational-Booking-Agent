@@ -4,38 +4,49 @@ ai_agent.py
 AI logic for the car wash booking assistant.
 
 This file handles:
+
 1. Extracting structured booking information.
 2. Generating natural conversational responses.
+
+The AI does NOT directly create bookings.
+Booking creation is controlled by conversation.py.
 """
 
-import os
 import json
+import os
 
 from dotenv import load_dotenv
 from openai import OpenAI
 
 
-# Load environment variables from .env
+# =========================================================
+# ENVIRONMENT
+# =========================================================
+
 load_dotenv()
 
 
-# Groq provides an OpenAI-compatible API.
+# =========================================================
+# AI CLIENT
+# =========================================================
+
 client = OpenAI(
     api_key=os.getenv("GROQ_API_KEY"),
     base_url="https://api.groq.com/openai/v1"
 )
 
 
-# ---------------------------------------------------------
+# =========================================================
 # SYSTEM PROMPT
-# ---------------------------------------------------------
+# =========================================================
 
 SYSTEM_PROMPT = """
 You are a friendly AI booking assistant for a car wash service.
 
-Your job is to help customers book a car wash appointment.
+Your job is to help customers collect the information required
+to book a car wash appointment.
 
-A booking requires these five pieces of information:
+A booking requires exactly these five pieces of information:
 
 1. customer_name
 2. vehicle_type
@@ -43,39 +54,43 @@ A booking requires these five pieces of information:
 4. preferred_time
 5. contact_details
 
-You should:
+Rules:
 
 - Be friendly and conversational.
 - Understand natural human language.
-- Extract information from customer messages.
 - Never invent booking information.
+- Never guess a customer's name.
+- Never change a customer's name.
+- Preserve customer-provided information exactly whenever possible.
 - Ask only for information that is still missing.
 - Do not repeatedly ask for information already provided.
-- If a date or time is unclear, ask the customer to clarify.
 - If the customer corrects information, use the corrected information.
-- Once all required information is collected, show a summary.
-- Ask the customer for confirmation before considering the booking confirmed.
-- Never claim a booking is confirmed unless the customer explicitly confirms it.
+- If a date or time is unclear, ask for clarification.
+- Once all required information is collected, provide a concise summary.
+- Never claim that a booking has been confirmed.
+- Only the application backend can confirm a booking.
 """
 
 
-# ---------------------------------------------------------
+# =========================================================
 # EXTRACT BOOKING INFORMATION
-# ---------------------------------------------------------
+# =========================================================
 
 def extract_booking_information(user_message, current_booking):
     """
-    Extract booking information from the customer's latest message.
+    Extract booking information explicitly present
+    in the customer's latest message.
 
-    Only information explicitly provided in the latest message
-    should be extracted.
+    The current booking is provided only as context.
+    It must NOT be copied into the extraction result
+    unless the customer explicitly mentions it again.
     """
 
     prompt = f"""
-You are a STRICT information extraction system.
+You are a STRICT booking information extraction system.
 
-Your ONLY job is to extract booking information that is
-EXPLICITLY stated in the customer's LATEST message.
+Extract ONLY information explicitly stated in the customer's
+LATEST message.
 
 Current booking state:
 
@@ -95,55 +110,95 @@ The booking fields are:
 
 IMPORTANT RULES:
 
-1. Look ONLY at the latest customer message when deciding
-   what information was provided.
+1. Look ONLY at the latest customer message.
 
-2. NEVER invent, guess, assume, or create information.
+2. NEVER invent, guess, infer, or assume information.
 
-3. If the customer says something unrelated such as
-   "hello", "hi", "thanks", "okay", or "goodbye",
-   return null for every field.
+3. Do not copy values from the current booking.
 
-4. If information is not explicitly present in the latest
-   message, return null for that field.
+4. If a value is not explicitly stated in the latest message,
+   return null.
 
-5. Words and phrases such as "tomorrow", "today", "Monday",
-   "Friday", "this Friday", or "next Friday" represent DATE
-   information and belong in preferred_date.
+5. If the customer explicitly corrects an existing value,
+   return the new corrected value.
 
-6. Expressions such as "5 PM", "at 5 PM", "3 PM",
-   "around 10:30 AM", "at noon", or "in the afternoon"
-   represent TIME information and belong in preferred_time.
+6. A person's name belongs in customer_name.
 
-7. When date and time appear together in the same sentence,
-   extract BOTH.
+7. Vehicle names and types belong in vehicle_type.
 
-   Example:
-   "I'd like to come Friday at 3 PM."
+8. Dates such as:
+   today
+   tomorrow
+   Monday
+   Friday
+   this Friday
+   next Friday
 
-   MUST produce:
+   belong in preferred_date.
 
-   "preferred_date": "Friday"
-   "preferred_time": "3 PM"
+9. Times such as:
+   3 PM
+   5 PM
+   10:30 AM
+   noon
+   afternoon
 
-8. Do not treat the word "at" as part of the time value.
-   Store "3 PM", not "at 3 PM".
+   belong in preferred_time.
 
-9. Vehicle names such as "Toyota Corolla", "Honda Civic",
-   "SUV", or "sedan" belong in vehicle_type.
+10. If date and time occur together, extract both.
 
-10. A person's name belongs in customer_name.
+Example:
 
-11. A phone number or email belongs in contact_details.
+"I want to come Friday at 3 PM."
 
-12. If the customer corrects something, return the corrected value.
+Return:
 
-13. Do not copy information from the current booking unless
-    the customer explicitly mentions or corrects it in the latest message.
+"preferred_date": "Friday"
+"preferred_time": "3 PM"
 
-Return ONLY valid JSON.
+11. Do not include "at" in the time.
 
-Use EXACTLY these keys:
+12. Phone numbers and email addresses belong in
+    contact_details.
+
+13. Preserve names exactly as provided.
+
+Example:
+
+Customer:
+"Arin"
+
+Return:
+
+"customer_name": "Arin"
+
+NOT:
+
+"Aaron"
+
+14. Preserve phone numbers exactly as provided.
+
+Example:
+
+"03361251259"
+
+Return:
+
+"03361251259"
+
+15. Greetings such as:
+   hello
+   hi
+   thanks
+   okay
+   goodbye
+
+   should return null for every field unless
+   booking information is also explicitly included.
+
+16. Return ONLY valid JSON.
+
+Use exactly these keys:
 
 {{
     "customer_name": null,
@@ -156,7 +211,6 @@ Use EXACTLY these keys:
 
     response = client.chat.completions.create(
         model="llama-3.1-8b-instant",
-
         messages=[
             {
                 "role": "system",
@@ -167,23 +221,31 @@ Use EXACTLY these keys:
                 "content": prompt
             }
         ],
-
         response_format={
             "type": "json_object"
         }
     )
 
-    return json.loads(
-        response.choices[0].message.content
-    )
+    content = response.choices[0].message.content
 
+    if not content:
+        raise RuntimeError(
+            "AI returned an empty extraction response."
+        )
+
+    return json.loads(content)
+
+
+# =========================================================
 # GENERATE CONVERSATIONAL RESPONSE
-
+# =========================================================
 
 def generate_booking_response(user_message, booking):
     """
-    Generate the natural language response that the customer
-    should receive after their latest message.
+    Generate the conversational response after
+    the latest customer message.
+
+    This function does not create or confirm bookings.
     """
 
     booking_data = {
@@ -195,17 +257,15 @@ def generate_booking_response(user_message, booking):
     }
 
     prompt = f"""
-The customer just sent this message:
+The customer just sent:
 
 "{user_message}"
 
-The current booking information is:
+Current booking information:
 
 {json.dumps(booking_data, indent=2)}
 
-Your job is to continue the conversation naturally.
-
-The required booking information is:
+Required information:
 
 1. customer_name
 2. vehicle_type
@@ -213,44 +273,48 @@ The required booking information is:
 4. preferred_time
 5. contact_details
 
-Follow these rules:
+Your job is to continue the conversation naturally.
+
+Rules:
 
 1. If customer_name is missing, ask for the customer's name.
 
-2. If customer_name is available but vehicle_type is missing,
-   ask what type of vehicle they have.
+2. If vehicle_type is missing, ask what type of vehicle
+   they have.
 
-3. If customer_name and vehicle_type are available but
-   preferred_date is missing, ask what day they want the wash.
+3. If preferred_date is missing, ask what day they want
+   the car wash.
 
-4. If the date is available but preferred_time is missing,
-   ask what time they prefer.
+4. If preferred_time is missing, ask what time they prefer.
 
-5. If everything except contact_details is available,
-   ask for a phone number or email.
+5. If contact_details is missing, ask for a phone number
+   or email.
 
-6. If all five fields are available, provide a short booking
-   summary and ask the customer to confirm it.
+6. Ask ONLY for missing information.
 
-7. Do not claim that the appointment is confirmed yet.
+7. Never ask again for information already present.
 
-8. Do not ask for information that is already available.
+8. If multiple pieces of information were provided,
+   acknowledge them naturally and ask only for the
+   remaining missing information.
 
-9. Be friendly and concise.
+9. If the customer simply says hello and no booking
+   information exists, greet them and explain that
+   you can help book a car wash.
 
-10. If the customer simply says hello and no booking information
-    exists, greet them and explain that you can help book a car wash.
+10. If all five fields are available, DO NOT say that
+    the booking is confirmed.
 
-11. If the customer says something like "thanks", respond naturally
-    while keeping the booking conversation moving if necessary.
+11. The application will separately generate the final
+    confirmation summary.
 
-Return ONLY the message that should be sent to the customer.
-Do not return JSON.
+12. Keep responses concise and natural.
+
+Return ONLY the message to send to the customer.
 """
 
     response = client.chat.completions.create(
         model="llama-3.1-8b-instant",
-
         messages=[
             {
                 "role": "system",
@@ -263,4 +327,11 @@ Do not return JSON.
         ]
     )
 
-    return response.choices[0].message.content.strip()
+    content = response.choices[0].message.content
+
+    if not content:
+        raise RuntimeError(
+            "AI returned an empty conversational response."
+        )
+
+    return content.strip()

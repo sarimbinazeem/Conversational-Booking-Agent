@@ -22,15 +22,23 @@ class Booking:
     contact_details: str | None = None
 
     # Booking workflow state
+    #
+    # Possible states:
+    # collecting
+    # awaiting_confirmation
+    # confirmed
+    # cancelled
     booking_status: str = "collecting"
-    awaiting_confirmation: bool = False
 
+    # True only after the complete booking summary
+    # has been presented to the customer.
+    awaiting_confirmation: bool = False
 
     # =====================================================
     # CHECK WHETHER BOOKING IS COMPLETE
     # =====================================================
 
-    def is_complete(self):
+    def is_complete(self) -> bool:
         """
         Return True when all required booking
         information has been collected.
@@ -44,12 +52,11 @@ class Booking:
             self.contact_details
         ])
 
-
     # =====================================================
     # FIND MISSING INFORMATION
     # =====================================================
 
-    def missing_fields(self):
+    def missing_fields(self) -> list[str]:
         """
         Return a list containing all required fields
         that are still missing.
@@ -73,3 +80,20 @@ class Booking:
             missing.append("contact_details")
 
         return missing
+
+    # =====================================================
+    # RESET CONFIRMATION STATE
+    # =====================================================
+
+    def reset_confirmation(self):
+        """
+        Reset the confirmation workflow.
+
+        This is used when the customer changes
+        booking information.
+        """
+
+        self.awaiting_confirmation = False
+
+        if self.booking_status != "confirmed":
+            self.booking_status = "collecting"
